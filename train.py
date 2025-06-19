@@ -112,7 +112,7 @@ def main():
         logging_dir=f"{args.output_dir}/logs",
         save_strategy="epoch",
         save_steps=100,
-        evaluation_strategy="no",
+        eval_strategy="no",  # Fixed: changed from evaluation_strategy
         load_best_model_at_end=False,
         report_to="tensorboard",
         run_name="RCH-StackBot-3.8B-training"
@@ -142,11 +142,20 @@ def main():
     tokenizer.save_pretrained(args.output_dir)
     
     # Spara träningskonfiguration
+    lora_config_dict = {
+        "task_type": str(lora_config.task_type),
+        "inference_mode": lora_config.inference_mode,
+        "r": lora_config.r,
+        "lora_alpha": lora_config.lora_alpha,
+        "lora_dropout": lora_config.lora_dropout,
+        "target_modules": list(lora_config.target_modules) if isinstance(lora_config.target_modules, set) else lora_config.target_modules
+    }
+    
     config = {
         "model_name": "RCH-StackBot-3.8B",
         "base_model": "microsoft/Phi-3-mini-4k-instruct",
         "training_args": vars(args),
-        "lora_config": lora_config.__dict__
+        "lora_config": lora_config_dict
     }
     
     with open(f"{args.output_dir}/training_config.json", "w") as f:

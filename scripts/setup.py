@@ -1,211 +1,158 @@
 #!/usr/bin/env python3
 """
-RCH-StackBot-3.8B Setup Script
-Automatisk installation och konfiguration
+RCH-StackBot-3.8B Training Script
+Tränar Phi-3 Mini för svenska fullstack-utveckling
 """
 
 import os
-import sys
-import subprocess
+import json
 import torch
+from transformers import (
+    AutoModelForCausalLM,
+    AutoTokenizer,
+    TrainingArguments,
+    Trainer,
+    DataCollatorForLanguageModeling
+)
+from datasets import load_dataset
+from peft import LoraConfig, get_peft_model, TaskType
+import argparse
 
-def check_python_version():
-    """Kontrollera Python-version"""
-    if sys.version_info < (3, 8):
-        print("❌ Python 3.8+ krävs")
-        sys.exit(1)
-    print(f"✅ Python {sys.version_info.major}.{sys.version_info.minor}")
+def setup_model_and_tokenizer(model_name="microsoft/Phi-3-mini-4k-instruct"):
+    """Ladda och konfigurera modell och tokenizer"""
+    print(f"Laddar modell: {model_name}")
+    
+    # Ladda tokenizer
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+    
+    # Ladda modell med kvantisering för att spara minne
+    model = AutoModelForCausalLM.from_pretrained(
+        model_name,
+        torch_dtype=torch.float16,
+        device_map="auto",
+        trust_remote_code=True
+    )
+    
+    return model, tokenizer
 
-def check_gpu():
-    """Kontrollera GPU-tillgänglighet"""
-    if torch.cuda.is_available():
-        gpu_name = torch.cuda.get_device_name(0)
-        gpu_memory = torch.cuda.get_device_properties(0).total_memory / 1024**3
-        print(f"✅ GPU: {gpu_name} ({gpu_memory:.1f} GB)")
-        
-        if gpu_memory < 10:
-            print("⚠️  Varning: Mindre än 10 GB GPU-minne kan orsaka problem")
+def setup_lora_config():
+    """Konfigurera LoRA för effektiv fine-tuning"""
+    lora_config = LoraConfig(
+        task_type=TaskType.CAUSAL_LM,
+        inference_mode=False,
+        r=16,  # LoRA rank
+        lora_alpha=32,
+        lora_dropout=0.1,
+        target_modules=["q_proj", "v_proj", "k_proj", "o_proj"]
+    )
+    return lora_config
+
+def prepare_dataset(tokenizer, data_path="data/training_data.txt"):
+    """Förbered träningsdata"""
+    print(f"Laddar träningsdata från: {data_path}")
+    
+    # Ladda data
+    if data_path.endswith('.txt'):
+        dataset = load_dataset('text', data_files=data_path)
     else:
-        print("❌ Ingen CUDA-kompatibel GPU hittades")
-        print("   Modellen kommer köras på CPU (mycket långsamt)")
-
-def install_requirements():
-    """Installera Python-paket"""
-    print("\n📦 Installerar Python-paket...")
+        dataset = load_dataset(data_path)
     
-    requirements = [
-        "torch>=2.0.0",
-        "transformers>=4.36.0", 
-        "datasets>=2.14.0",
-        "accelerate>=0.24.0",
-        "bitsandbytes>=0.41.0",
-        "peft>=0.7.0",
-        "trl>=0.7.0",
-        "scipy>=1.10.0",
-        "numpy>=1.24.0",
-        "pandas>=2.0.0",
-        "tqdm>=4.65.0",
-        "tensorboard>=2.14.0"
-    ]
-    
-    for package in requirements:
-        try:
-            print(f"  Installerar {package}...")
-            subprocess.check_call([sys.executable, "-m", "pip", "install", package])
-        except subprocess.CalledProcessError:
-            print(f"❌ Misslyckades att installera {package}")
-            return False
-    
-    print("✅ Alla paket installerade")
-    return True
-
-def create_directories():
-    """Skapa nödvändiga mappar"""
-    print("\n📁 Skapar mappar...")
-    
-    dirs = [
-        "data",
-        "models", 
-        "models/RCH-StackBot-3.8B",
-        "scripts",
-        "logs"
-    ]
-    
-    for dir_name in dirs:
-        os.makedirs(dir_name, exist_ok=True)
-        print(f"  ✅ {dir_name}")
-
-def download_base_model():
-    """Ladda ner basmodell för snabbare träning"""
-    print("\n⬇️  Laddar ner basmodell...")
-    
-    try:
-        from transformers import AutoModelForCausalLM, AutoTokenizer
-        
-        model_name = "microsoft/Phi-3-mini-4k-instruct"
-        cache_dir = "./models/phi3-base"
-        
-        print(f"  Laddar tokenizer...")
-        tokenizer = AutoTokenizer.from_pretrained(
-            model_name,
-            cache_dir=cache_dir
+    def tokenize_function(examples):
+        return tokenizer(
+            examples['text'],
+            truncation=True,
+            padding=True,
+            max_length=512,
+            return_tensors="pt"
         )
-        
-        print(f"  Laddar modell...")
-        model = AutoModelForCausalLM.from_pretrained(
-            model_name,
-            cache_dir=cache_dir,
-            torch_dtype=torch.float16
-        )
-        
-        print("✅ Basmodell nedladdad och cached")
-        return True
-        
-    except Exception as e:
-        print(f"❌ Misslyckades att ladda basmodell: {e}")
-        return False
-
-def create_sample_data():
-    """Skapa exempeldata om ingen finns"""
-    data_file = "data/training_data.txt"
     
-    if not os.path.exists(data_file):
-        print(f"\n📝 Skapar exempeldata: {data_file}")
-        
-        sample_data = """<|user|>
-Hej! Vad kan du hjälpa mig med?
-<|end|>
-<|assistant|>
-Hej! Jag är RCH-StackBot och jag kan hjälpa dig med fullstack-utveckling på svenska. Jag kan svara på frågor om:
-
-- Frontend: React, Vue, Angular, HTML, CSS, JavaScript
-- Backend: Node.js, Python, Java, API-utveckling
-- Databaser: SQL, NoSQL, MongoDB, PostgreSQL
-- DevOps: Docker, CI/CD, deployment
-- Och mycket mer!
-
-Vad skulle du vilja veta?
-<|end|>
-
-<|user|>
-Hur skapar jag en enkel React-komponent?
-<|end|>
-<|assistant|>
-Här är hur du skapar en enkel React-komponent:
-
-```javascript
-import React from 'react';
-
-// Funktionskomponent
-const MyComponent = () => {
-  return (
-    <div>
-      <h1>Hej från min komponent!</h1>
-      <p>Detta är en enkel React-komponent.</p>
-    </div>
-  );
-};
-
-export default MyComponent;
-```
-
-Du kan också skapa den med arrow function:
-```javascript
-const MyComponent = () => (
-  <div>
-    <h1>Hej från min komponent!</h1>
-  </div>
-);
-```
-
-För att använda komponenten:
-```javascript
-import MyComponent from './MyComponent';
-
-function App() {
-  return (
-    <div>
-      <MyComponent />
-    </div>
-  );
-}
-```
-<|end|>"""
-        
-        with open(data_file, 'w', encoding='utf-8') as f:
-            f.write(sample_data)
-        
-        print("✅ Exempeldata skapad")
+    tokenized_dataset = dataset.map(tokenize_function, batched=True)
+    return tokenized_dataset
 
 def main():
-    print("🚀 RCH-StackBot-3.8B Setup")
-    print("=" * 40)
+    parser = argparse.ArgumentParser(description="Träna RCH-StackBot-3.8B")
+    parser.add_argument("--data_path", default="data/training_data.txt", help="Sökväg till träningsdata")
+    parser.add_argument("--output_dir", default="./models/RCH-StackBot-3.8B", help="Utdata-mapp")
+    parser.add_argument("--epochs", type=int, default=3, help="Antal tränings-epoker")
+    parser.add_argument("--batch_size", type=int, default=4, help="Batch-storlek")
+    parser.add_argument("--learning_rate", type=float, default=2e-4, help="Inlärningshastighet")
     
-    # Kontroller
-    check_python_version()
-    check_gpu()
+    args = parser.parse_args()
     
-    # Installation
-    if not install_requirements():
-        print("❌ Setup misslyckades vid paketinstallation")
-        sys.exit(1)
+    # Skapa utdata-mapp
+    os.makedirs(args.output_dir, exist_ok=True)
     
-    # Skapa mappar
-    create_directories()
+    # Ladda modell och tokenizer
+    model, tokenizer = setup_model_and_tokenizer()
     
-    # Ladda basmodell
-    if not download_base_model():
-        print("⚠️  Varning: Basmodell kunde inte laddas (kommer laddas vid träning)")
+    # Konfigurera LoRA
+    lora_config = setup_lora_config()
+    model = get_peft_model(model, lora_config)
     
-    # Skapa exempeldata
-    create_sample_data()
+    print(f"Modell har {model.num_parameters()} parametrar")
+    print(f"Träningsbara parametrar: {model.num_parameters(only_trainable=True)}")
     
-    print("\n" + "=" * 40)
-    print("🎉 Setup klar!")
-    print("\nNästa steg:")
-    print("1. Lägg till din träningsdata i data/training_data.txt")
-    print("2. Kör: python train.py")
-    print("3. Testa modellen: python inference.py --interactive")
+    # Förbered dataset
+    dataset = prepare_dataset(tokenizer, args.data_path)
+    
+    # Träningsargument
+    training_args = TrainingArguments(
+        output_dir=args.output_dir,
+        overwrite_output_dir=True,
+        num_train_epochs=args.epochs,
+        per_device_train_batch_size=args.batch_size,
+        gradient_accumulation_steps=4,
+        warmup_steps=100,
+        max_steps=1000,
+        learning_rate=args.learning_rate,
+        fp16=True,
+        logging_steps=10,
+        logging_dir=f"{args.output_dir}/logs",
+        save_strategy="epoch",
+        save_steps=100,
+        eval_strategy="no",  # Fixed: changed from evaluation_strategy
+        load_best_model_at_end=False,
+        report_to="tensorboard",
+        run_name="RCH-StackBot-3.8B-training"
+    )
+    
+    # Data collator
+    data_collator = DataCollatorForLanguageModeling(
+        tokenizer=tokenizer,
+        mlm=False,
+    )
+    
+    # Trainer
+    trainer = Trainer(
+        model=model,
+        args=training_args,
+        train_dataset=dataset['train'],
+        data_collator=data_collator,
+    )
+    
+    # Starta träning
+    print("Startar träning...")
+    trainer.train()
+    
+    # Spara modell
+    print(f"Sparar modell till: {args.output_dir}")
+    trainer.save_model()
+    tokenizer.save_pretrained(args.output_dir)
+    
+    # Spara träningskonfiguration
+    config = {
+        "model_name": "RCH-StackBot-3.8B",
+        "base_model": "microsoft/Phi-3-mini-4k-instruct",
+        "training_args": vars(args),
+        "lora_config": lora_config.__dict__
+    }
+    
+    with open(f"{args.output_dir}/training_config.json", "w") as f:
+        json.dump(config, f, indent=2)
+    
+    print("Träning klar!")
 
 if __name__ == "__main__":
     main()
