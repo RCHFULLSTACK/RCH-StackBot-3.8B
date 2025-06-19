@@ -8,8 +8,8 @@ MIT License - Se LICENSE filen för detaljer.
 Kontakt
 Skapad av RCH FULLSTACK
 
-GitHub: [RCH FULLSTACK]
-Email: [kontakt@rchfullstack.com]
+GitHub: RCH FULLSTACK
+Email: kontakt@rchfullstack.com
 
 Changelog
 v1.0.0 (2025-06-19)

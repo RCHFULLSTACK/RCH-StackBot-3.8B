@@ -1,0 +1,368 @@
+<|user|>
+Förklara hur React hooks fungerar på svenska
+<|end|>
+<|assistant|>
+React hooks är funktioner som låter dig använda state och andra React-funktioner i funktionskomponenter. De introducerades i React 16.8 och revolutionerade hur vi skriver React-kod.
+
+De vanligaste hooks är:
+
+**useState**: Låter dig lägga till state i funktionskomponenter
+```javascript
+const [count, setCount] = useState(0);
+```
+
+**useEffect**: Hanterar sidoeffekter som API-anrop, prenumerationer och cleanup
+```javascript
+useEffect(() => {
+  // Kod som körs efter render
+  return () => {
+    // Cleanup-kod
+  };
+}, [dependencies]);
+```
+
+**useContext**: Ger tillgång till context-värden utan att behöva wrappa komponenter
+
+Hooks måste alltid anropas i samma ordning och bara på toppnivån i komponenter eller andra hooks.
+<|end|>
+
+<|user|>
+Hur skapar jag en REST API med Node.js och Express?
+<|end|>
+<|assistant|>
+Här är steg-för-steg guide för att skapa en REST API med Node.js och Express:
+
+**1. Initiera projektet:**
+```bash
+npm init -y
+npm install express cors helmet morgan
+npm install -D nodemon
+```
+
+**2. Grundläggande server (app.js):**
+```javascript
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+const morgan = require('morgan');
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Middleware
+app.use(helmet());
+app.use(cors());
+app.use(morgan('combined'));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Routes
+app.get('/api/users', (req, res) => {
+  res.json({ message: 'Hämta alla användare' });
+});
+
+app.post('/api/users', (req, res) => {
+  res.status(201).json({ message: 'Skapa ny användare', data: req.body });
+});
+
+app.listen(PORT, () => {
+  console.log(`Server körs på port ${PORT}`);
+});
+```
+
+**3. Lägg till i package.json:**
+```json
+{
+  "scripts": {
+    "start": "node app.js",
+    "dev": "nodemon app.js"
+  }
+}
+```
+
+Detta ger dig en grundläggande REST API som kan hantera GET och POST requests.
+<|end|>
+
+<|user|>
+Vad är skillnaden mellan SQL och NoSQL-databaser?
+<|end|>
+<|assistant|>
+SQL och NoSQL-databaser skiljer sig åt på flera viktiga sätt:
+
+**SQL-databaser (Relationella):**
+- **Struktur**: Använder tabeller med fasta scheman
+- **Språk**: SQL (Structured Query Language)
+- **ACID**: Garanterar Atomicity, Consistency, Isolation, Durability
+- **Skalning**: Vertikal skalning (kraftfullare servrar)
+- **Exempel**: MySQL, PostgreSQL, SQL Server, Oracle
+
+**Fördelar:**
+- Stark konsistens
+- Komplex queries med JOINs
+- Mogen teknologi med standarder
+- Bra för komplexa relationer
+
+**NoSQL-databaser:**
+- **Struktur**: Flexibel - dokument, key-value, grafer, kolumner
+- **Schema**: Flexibelt eller inget schema
+- **Skalning**: Horisontell skalning (fler servrar)
+- **Exempel**: MongoDB, Redis, Cassandra, Neo4j
+
+**Fördelar:**
+- Snabb utveckling
+- Hanterar stora mängder data
+- Flexibilitet för ändrade krav
+- Bättre prestanda för vissa användningsområden
+
+**När använda vad:**
+- **SQL**: Komplexa relationer, finansiella system, när ACID krävs
+- **NoSQL**: Rapid prototyping, big data, realtidsapplikationer, innehållshantering
+<|end|>
+
+<|user|>
+Hur implementerar jag autentisering med JWT i en Express-app?
+<|end|>
+<|assistant|>
+Här är hur du implementerar JWT-autentisering i Express:
+
+**1. Installera nödvändiga paket:**
+```bash
+npm install jsonwebtoken bcryptjs
+```
+
+**2. Skapa middleware för JWT-verifiering:**
+```javascript
+const jwt = require('jsonwebtoken');
+
+const verifyToken = (req, res, next) => {
+  const token = req.header('Authorization')?.replace('Bearer ', '');
+  
+  if (!token) {
+    return res.status(401).json({ message: 'Ingen token, åtkomst nekad' });
+  }
+  
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch (error) {
+    res.status(401).json({ message: 'Token är inte giltig' });
+  }
+};
+```
+
+**3. Login-route som genererar JWT:**
+```javascript
+const bcrypt = require('bcryptjs');
+
+app.post('/api/login', async (req, res) => {
+  const { email, password } = req.body;
+  
+  try {
+    // Hitta användare (ersätt med din databas-logik)
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(400).json({ message: 'Fel inloggningsuppgifter' });
+    }
+    
+    // Kontrollera lösenord
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ message: 'Fel inloggningsuppgifter' });
+    }
+    
+    // Skapa JWT
+    const payload = {
+      user: {
+        id: user.id,
+        email: user.email
+      }
+    };
+    
+    const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' });
+    
+    res.json({ token, user: { id: user.id, email: user.email } });
+  } catch (error) {
+    res.status(500).json({ message: 'Serverfel' });
+  }
+});
+```
+
+**4. Skyddad route:**
+```javascript
+app.get('/api/profile', verifyToken, (req, res) => {
+  res.json({ message: 'Skyddad route', user: req.user });
+});
+```
+
+**5. Sätt JWT_SECRET i .env-fil:**
+```
+JWT_SECRET=din_hemliga_nyckel_här
+```
+
+Nu kan klienter logga in och få en token som används för att komma åt skyddade routes.
+<|end|>
+
+<|user|>
+Förklara vad Docker är och hur man använder det för utveckling
+<|end|>
+<|assistant|>
+Docker är en containeriseringsteknologi som låter dig paketera applikationer med alla deras beroenden i portabla, lättviktiga containers.
+
+**Vad är Docker?**
+- **Container**: En isolerad miljö som innehåller din app och alla dess beroenden
+- **Image**: En mall för att skapa containers
+- **Dockerfile**: Instruktioner för att bygga en image
+- **Registry**: Lagringsplats för images (som Docker Hub)
+
+**Fördelar för utveckling:**
+- **Konsistens**: "Det fungerar på min maskin" - nu fungerar det överallt
+- **Isolering**: Olika projekt kan ha olika versioner av samma verktyg
+- **Snabb uppsättning**: Nya utvecklare kan komma igång direkt
+- **Enkel deployment**: Samma container körs i utveckling och produktion
+
+**Grundläggande kommandon:**
+```bash
+# Ladda ner en image
+docker pull node:18
+
+# Kör en container
+docker run -it node:18 bash
+
+# Lista containers
+docker ps
+
+# Stoppa container
+docker stop <container-id>
+
+# Bygga egen image
+docker build -t min-app .
+```
+
+**Exempel Dockerfile för Node.js-app:**
+```dockerfile
+FROM node:18-alpine
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm install
+
+COPY . .
+
+EXPOSE 3000
+
+CMD ["npm", "start"]
+```
+
+**Docker Compose för flera tjänster:**
+```yaml
+version: '3.8'
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    depends_on:
+      - db
+  
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_PASSWORD: password
+```
+
+Docker förenklar utveckling, deployment och säkerställer att din app fungerar identiskt överallt.
+<|end|>
+
+<|user|>
+Hur optimerar jag en React-applikation för bättre prestanda?
+<|end|>
+<|assistant|>
+Här är de viktigaste teknikerna för att optimera React-prestanda:
+
+**1. React.memo för komponenter:**
+```javascript
+const ExpensiveComponent = React.memo(({ data }) => {
+  return <div>{data.name}</div>;
+});
+
+// Med custom comparison
+const MyComponent = React.memo(({ user }) => {
+  return <div>{user.name}</div>;
+}, (prevProps, nextProps) => {
+  return prevProps.user.id === nextProps.user.id;
+});
+```
+
+**2. useMemo för dyra beräkningar:**
+```javascript
+const ExpensiveList = ({ items, filter }) => {
+  const filteredItems = useMemo(() => {
+    return items.filter(item => item.category === filter);
+  }, [items, filter]);
+  
+  return <ul>{filteredItems.map(item => <li key={item.id}>{item.name}</li>)}</ul>;
+};
+```
+
+**3. useCallback för funktioner:**
+```javascript
+const Parent = ({ items }) => {
+  const [filter, setFilter] = useState('');
+  
+  const handleClick = useCallback((id) => {
+    // Hantera klick
+  }, []);
+  
+  return items.map(item => 
+    <Child key={item.id} item={item} onClick={handleClick} />
+  );
+};
+```
+
+**4. Lazy loading med React.lazy:**
+```javascript
+const LazyComponent = React.lazy(() => import('./LazyComponent'));
+
+function App() {
+  return (
+    <Suspense fallback={<div>Laddar...</div>}>
+      <LazyComponent />
+    </Suspense>
+  );
+}
+```
+
+**5. Virtualisering för stora listor:**
+```javascript
+import { FixedSizeList as List } from 'react-window';
+
+const BigList = ({ items }) => (
+  <List
+    height={600}
+    itemCount={items.length}
+    itemSize={35}
+  >
+    {({ index, style }) => (
+      <div style={style}>
+        {items[index].name}
+      </div>
+    )}
+  </List>
+);
+```
+
+**6. Bundle-optimering:**
+- Använd Webpack Bundle Analyzer
+- Tree-shaking för oanvänd kod
+- Code splitting på route-nivå
+- Komprimera bilder och assets
+
+**7. State-optimering:**
+- Flytta state närmare konsumenterna
+- Undvik att skicka stora objekt som props
+- Använd lokalt state istället för global när möjligt
+
+Dessa tekniker kan dramatiskt förbättra prestanda, särskilt för större applikationer.
+<|end|>
